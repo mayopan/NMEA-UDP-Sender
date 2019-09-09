@@ -59,10 +59,17 @@ boolean connected = false;
 //The udp library class
 WiFiUDP udp;
 
+/*-------end Wifi section-------------*/
+
 //Send NMEA data with checksum on UDP
 void udpsend(const char *ip, int port, char *buff, size_t buffMax, bool serial);
 
-/*-------end Wifi section-------------*/
+//Compass section
+#include <Wire.h>
+#include <Adafruit_Sensor.h>
+#include <Adafruit_HMC5883_U.h>
+
+Adafruit_HMC5883_Unified mag = Adafruit_HMC5883_Unified(12345);
 
 void setup()
 {
@@ -80,6 +87,16 @@ void setup()
   IPAddress myIP = WiFi.softAPIP();
   Serial.print("AP IP address: ");
   Serial.println(myIP);
+
+  /* Initialise the mag sensor */
+  if (!mag.begin())
+  {
+    /* There was a problem detecting the HMC5883 ... check your connections */
+    Serial.println("Ooops, no HMC5883 detected ... Check your wiring!");
+    while (1)
+      ;
+  }
+
   //Assume that the U-Blox GPS is running at 9600 baud (the default) or at 115200 baud.
   //Loop until we're in sync and then ensure it's at 115200 baud.
   do
@@ -122,8 +139,11 @@ void loop()
   if (millis() - lastTime > 200)
   {
     lastTime = millis(); //Update the timer
-    char rmcBuff[100];
-    char GLLBuff[100];
+
+    //GPS data polling and make NMEA0183 sentence
+    char RMCBuff[100];
+    char GGABuff[100];
+    char HDGBuff[50];
     uint8_t hour = myGPS.getHour();
     uint8_t minute = myGPS.getMinute();
     uint8_t second = myGPS.getSecond();
@@ -137,43 +157,108 @@ void loop()
     float latmin = (float)(latitude % 10000000) / 10000000 * 60;
     int londeg = (int)(longitude / 10000000);
     float lonmin = (float)(longitude % 10000000) / 10000000 * 60;
-//  long spd = myGPS.getGroundSpeed(); // mm/s
+    //  long spd = myGPS.getGroundSpeed(); // mm/s
     float spdkt = (float)myGPS.getGroundSpeed() * 3600 / 1000000 / 1.6;
-//  long hdg = myGPS.getHeading();
+    //  long hdg = myGPS.getHeading();
     float hdgdeg = (float)myGPS.getHeading() / 100000;
-//  long altitude = myGPS.getAltitude();
-//  byte SIV = myGPS.getSIV();
+    float altitude = (float)myGPS.getAltitudeMSL() / 1000; // mm->m
+    unsigned long horacc = myGPS.getHorizontalAccuracy();
+    long geoidsep = myGPS.getGeoidSeparation();
+    byte SIV = myGPS.getSIV();
     char fix = 'V';
-    if (myGPS.getFixType() > 0)
+    int fixGGA = 0;
+    switch (myGPS.getFixType()) //0=no fix, 1=dead reckoning, 2=2D, 3=3D, 4=GNSS, 5=Time fix
     {
+    case 1:
+      break;
+    case 2:
       fix = 'A';
-    } //0=no, 3=3D, 4=GNSS+Deadreckoning)"));
+      fixGGA = 1;
+      break;
+    case 3:
+      fix = 'A';
+      fixGGA = 2;
+      break;
+    case 4:
+      fix = 'A';
+      fixGGA = 2;
+      break;
+    case 5:
+      break;
+    }
     char ns = 'N';
-    if(latitude>=0){
+    if (latitude >= 0)
+    {
       ns = 'N';
     }
-    else{
+    else
+    {
       ns = 'S';
     }
     char ew = 'E';
-    if (longitude>=0){
+    if (longitude >= 0)
+    {
       ew = 'E';
-    }else{
+    }
+    else
+    {
       ew = 'W';
     }
 
-    sprintf(rmcBuff, "$GNRMC,%02u%02u%02u.%03u,A,%d%2.5f,%c,%d%2.5f,%c,%1.2f,%03.2f,%02u%02u%02u,,,%c", hour, minute, second, msecond, latdeg, latmin, ns, londeg, lonmin, ew, spdkt, hdgdeg, dd, mm, yy, fix);
-    sprintf(GLLBuff, "$GNGLL,%d%2.5f,%c,%d%2.5f,%c,%02u%02u%02u.%02u,%c", latdeg, latmin, ns, londeg, lonmin, ew, hour, minute, second, msecond / 10, fix);
-/*
+    sprintf(RMCBuff, "$GNRMC,%02u%02u%02u.%03u,A,%d%2.5f,%c,%d%2.5f,%c,%1.2f,%03.2f,%02u%02u%02u,,,%c", hour, minute, second, msecond, latdeg, latmin, ns, londeg, lonmin, ew, spdkt, hdgdeg, dd, mm, yy, fix);
+    sprintf(GGABuff, "$GNGGA,%02u%02u%02u.%1u,%d%2.5f,%c,%d%2.5f,%c,%d,%u,%lu,%.1f,M,%ld,M,,,", hour, minute, second, msecond / 100, latdeg, latmin, ns, londeg, lonmin, ew, fixGGA, SIV, horacc, altitude, geoidsep);
+    /*
 Time (UTC)
 Status A - Data Valid, V - Data Invalid, FAA mode indicator (NMEA 2.3 and later)
 */
+    //End of GPS
+
+    //Compass data polling
+    /* Get a new sensor event */
+    sensors_event_t event;
+    mag.getEvent(&event);
+
+    // Calculate heading when the magnetometer is level, then correct for signs of axis.
+    float heading = atan2(event.magnetic.x, event.magnetic.y);
+
+    // Once you have your heading, you must then add your 'Declination Angle', which is the 'Error' of the magnetic field in your location.
+    // Find yours here: http://www.magnetic-declination.com/
+    // Mine is: -13* 2' W, which is ~13 Degrees, or (which we need) 0.22 radians
+    // If you cannot find your Declination, comment out these two lines, your compass will be slightly off.
+    float declinationAngle = 0.13;
+    heading += declinationAngle;
+    char ew_magdec = 'E';
+    if (declinationAngle >= 0)
+    {
+      ew_magdec = 'W';
+    }
+    else
+    {
+      ew_magdec = 'E';
+    }
+    // Correct for when signs are reversed.
+    if (heading < 0)
+      heading += 2 * PI;
+
+    // Check for wrap due to addition of declination.
+    if (heading > 2 * PI)
+      heading -= 2 * PI;
+
+    // Convert radians to degrees for readability.
+    float headingDegrees = heading * 180 / PI;
+
+    Serial.print("Heading (degrees): ");
+    Serial.println(headingDegrees);
+
+    sprintf(HDGBuff, "$HCHDG,%03.1f,,,%.1f,%c", headingDegrees, declinationAngle * 180 / PI, ew_magdec);
 
     //Send a packet
-    udpsend(udpAddress1, udpPort, rmcBuff, sizeof(rmcBuff), true);
-    udpsend(udpAddress2, udpPort, rmcBuff, sizeof(rmcBuff), false);
-    udpsend(udpAddress1, udpPort, GLLBuff, sizeof(GLLBuff), true);
-    udpsend(udpAddress2, udpPort, GLLBuff, sizeof(GLLBuff), false);
+    udpsend(udpAddress1, udpPort, RMCBuff, sizeof(RMCBuff), true);
+//    udpsend(udpAddress2, udpPort, RMCBuff, sizeof(RMCBuff), false);
+    udpsend(udpAddress1, udpPort, GGABuff, sizeof(GGABuff), true);
+//    udpsend(udpAddress2, udpPort, GGABuff, sizeof(GGABuff), false);
+    udpsend(udpAddress1, udpPort, HDGBuff, sizeof(HDGBuff), true);
+//    udpsend(udpAddress2, udpPort, HDGBuff, sizeof(HDGBuff), false);
   }
 }
 
