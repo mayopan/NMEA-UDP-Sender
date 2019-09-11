@@ -82,10 +82,11 @@ At this moment, it sends RMC and GLL sentences. *'@@' is masked to protect my pr
 I wanted to broadcast NMEA0183 instead of unicast for multi devices connection. But UDP data flow is terribly stacked in broadcast.
 I struggled to fix it for days but I couldn't. Welcome your suggestions if you can fix it!
 I will add new function below.
-* Add GGA sentence
-* Add HDM sentence with mag compass output
+* Add GGA sentence ... Done!
+* Add HDM sentence with mag compass output ... Done!
 * OLED display output
 * Seatalk - NMEA0183 bi-directional communication
+* small issue: When reconnects Wifi after once disconnected,  SoftAP atatches new IP, so UDP connection is lost. 
 
 # Author
  
