@@ -31,8 +31,6 @@
 #include "SparkFun_Ublox_Arduino_Library.h" //http://librarymanager/All#SparkFun_Ublox_GPS
 SFE_UBLOX_GPS myGPS;
 
-unsigned long lastTime = 0; //Simple local timer. Limits amount of I2C traffic to Ublox module.
-
 /*-----Wifi section----------------------------*/
 #include <WiFi.h>
 #include <WiFiUdp.h>
@@ -61,13 +59,14 @@ WiFiUDP udp;
 /*-------end Wifi section-------------*/
 
 //Send NMEA data with checksum on UDP
-void udpsend(char *buff, bool serial);
-char *nmeaEncodeGPS(int id, char *nmeacode, size_t length);
+
 char *nmeaEncodeCompass(char *nmeaCode, size_t length);
 
-const int RMC = 0;
-const int GGA = 1;
-const int VTG = 2;
+#include "UbloxGpsDataParser.h"
+
+UbloxGPS gpsData;
+
+void sendData(char *buff, bool SerialOut, bool UdpOut, bool OLEDOut);
 
 //Compass section
 #include <Wire.h>
@@ -79,35 +78,37 @@ HMC5883L compass;
 
 //OLED section
 #include <U8x8lib.h>
-U8X8_SH1107_PIMORONI_128X128_HW_I2C u8x8(/* reset=*/ 8);
+U8X8_SH1107_PIMORONI_128X128_HW_I2C u8x8(/* reset=*/8);
 
+unsigned long lastTime = 0;                 //Simple local timer.
+const unsigned long Polling_Interval = 100; // ms = 10Hz It's not sampling interval. It should be faster than GPS sampling.
 
 void setup()
 {
   u8x8.begin();
-  u8x8.setFont(u8x8_font_8x13B_1x2_f);   
+  u8x8.setFont(u8x8_font_8x13B_1x2_f);
   u8x8.clear();
   u8x8.inverse();
   u8x8.print("NMEA-UDP-Sender");
-  u8x8.setCursor(0,2);
+  u8x8.setCursor(0, 2);
   u8x8.noInverse();
   Serial.begin(115200);
   while (!Serial)
     ; //Wait for user to open terminal
   u8x8.print("Serial connected.");
-  u8x8.setCursor(0,4);
+  u8x8.setCursor(0, 4);
   Serial.println("NMEA-UDP-Sender start.");
   //Connect to the WiFi network
   u8x8.print("Config Wifi AP");
-  u8x8.setCursor(0,6);
+  u8x8.setCursor(0, 6);
   Serial.println("Configuring access point...");
   //Create Access Point
   WiFi.softAP(ssid, password);
   delay(100);
   WiFi.softAPConfig(ip, ip, subnet);
   IPAddress myIP = WiFi.softAPIP();
-      u8x8.print("AP IP address: ");
-  u8x8.setCursor(0,8);
+  u8x8.print("AP IP address: ");
+  u8x8.setCursor(0, 8);
   u8x8.print(myIP);
   Serial.print("AP IP address: ");
   Serial.println(myIP);
@@ -168,126 +169,28 @@ void setup()
   myGPS.setNavigationFrequency(5);
   myGPS.setAutoPVT(true, true);
   myGPS.saveConfiguration(); //Save the current settings to flash and BBR
-    u8x8.clear();
+  delay(1000);
+  u8x8.clear();
 }
 
 void loop()
 {
-// Position solution updates every 200ms. So polling every 100ms -> 100ms latancy in worst case.
-  if (millis() - lastTime > 100)
+  // Position solution updates every 200ms. So polling every 100ms -> 100ms latancy in worst case.
+  if (millis() - lastTime > Polling_Interval)
   {
     lastTime = millis(); //Update the timer
 
-// When GPS has new solution, start encoding position data to NMEA sentences
+    // When GPS has new solution, start encoding position data to NMEA sentences
     if (myGPS.getPVT())
     {
-      char nmeabuff[100];
-
-      udpsend(nmeaEncodeGPS(RMC, nmeabuff, sizeof(nmeabuff)), true);
-      udpsend(nmeaEncodeGPS(GGA, nmeabuff, sizeof(nmeabuff)), true);
-      udpsend(nmeaEncodeCompass(nmeabuff, sizeof(nmeabuff)), true);
-
+      char nmeabuff[90];
+      gpsData.parse(myGPS);
+      sendData(gpsData.nmeaRMC, true, true, true);
+      sendData(gpsData.nmeaGGA, true, true, false);
+      nmeaEncodeCompass(nmeabuff, sizeof(nmeabuff));
+      sendData(nmeabuff, true, true, false);
     }
   }
-}
-
-char *nmeaEncodeGPS(int id, char *nmeaCode, size_t length)
-{
-  char buff[length];
-  uint8_t hour = myGPS.getHour();
-  uint8_t minute = myGPS.getMinute();
-  uint8_t second = myGPS.getSecond();
-  uint16_t msecond = myGPS.getMillisecond();
-  long latitude = myGPS.getLatitude();   // degrees * 10^7
-  long longitude = myGPS.getLongitude(); // degrees * 10^7
-  uint8_t fixtype = myGPS.getFixType();  //0: no fix 1: dead reckoning only 2: 2D-fix 3: 3D-fix 4: GNSS + dead reckoning combined 5: time only fix
-  byte SIV = myGPS.getSIV();
-  unsigned long pDOP = myGPS.getPDOP();
-  float altitude = (float)myGPS.getAltitudeMSL() / 1000; // mm->m
-  float spdkt = (float)myGPS.getGroundSpeed() * 3600 / 1000000 / 1.6;
-  float cog = (float)myGPS.getHeading() / 100000;
-  uint8_t dd = myGPS.getDay();
-  uint8_t mm = myGPS.getMonth();
-  uint16_t yy = myGPS.getYear() % 100;
-  int latdeg = abs((int)(latitude / 10000000));
-  float latmin = (float)(latitude % 10000000) / 10000000 * 60;
-  int londeg = abs((int)(longitude / 10000000));
-  float lonmin = (float)(longitude % 10000000) / 10000000 * 60;
-
-
-  //long geoidsep = myGPS.getGeoidSeparation(); too long to wait for polling (1sec) so ignored
-
-  char fixRMC = 'V'; //V =No fix/ user limit over, A = 2D/3D/DGPS/RTK/Dead reckoning fix
-  int fixGGA = 0;    //0 = No fix, 1 = Autonomous GNSS fix, 2 = Differential GNSS fix, 4 = RTK fixed, 5 = RTK float, 6 = Estimated/Dead reckoning fix
-  switch (fixtype)   //0=no fix, 1=dead reckoning, 2=2D, 3=3D, 4=GNSS, 5=Time fix
-  {
-  case 1:
-    fixRMC = 'A';
-    break;
-  case 2:
-    fixRMC = 'A';
-    fixGGA = 1;
-    break;
-  case 3:
-    fixRMC = 'A';
-    fixGGA = 1;
-    break;
-  case 4:
-    fixRMC = 'A';
-    fixGGA = 1;
-    break;
-  case 5:
-    break;
-  }
-  char ns = 'N';
-  if (latitude >= 0)
-  {
-    ns = 'N';
-  }
-  else
-  {
-    ns = 'S';
-    latmin*=(-1);
-  }
-  char ew = 'E';
-  if (longitude >= 0)
-  {
-    ew = 'E';
-  }
-  else
-  {
-    ew = 'W';
-    lonmin*=(-1);
-  }
-//    u8x8.clear();
-  u8x8.setCursor(0,0);
-    u8x8.print("Lat:");
-    u8x8.setCursor(0,2);
-    u8x8.printf("%3d%c%02.5f'%c",latdeg,'\xB0', latmin, ns);
-  u8x8.setCursor(0,4);
-    u8x8.print("Lon:");
-    u8x8.setCursor(0,6);
-    u8x8.printf("%3d%c%02.5f'%c",londeg, '\xB0',lonmin, ew);
-      u8x8.setCursor(0,8);
-    u8x8.print("fix SIV pDOP Alt");
-    u8x8.setCursor(0,10);
-    if(altitude>999)altitude=999;
-    u8x8.printf(" %d  %2u  %4lu %3.0f",fixtype, SIV, pDOP, altitude);
-        u8x8.setCursor(0,12);
-
-      if (id == RMC)
-    snprintf(buff, sizeof(buff), "$GNRMC,%02u%02u%02u.%03u,A,%d%2.5f,%c,%d%2.5f,%c,%1.2f,%03.2f,%02u%02u%02u,,,%c", hour, minute, second, msecond, latdeg, latmin, ns, londeg, lonmin, ew, spdkt, cog, dd, mm, yy, fixRMC);
-  if (id == GGA)
-    snprintf(buff, sizeof(buff), "$GNGGA,%02u%02u%02u.%1u,%d%2.5f,%c,%d%2.5f,%c,%d,%u,%lu,%.1f,M,,M,,,", hour, minute, second, msecond / 100, latdeg, latmin, ns, londeg, lonmin, ew, fixGGA, SIV, pDOP, altitude);
-
-  char cs = 0;
-  for (int i = 1; i < strnlen(buff, sizeof(buff)); i++)
-  {
-    cs ^= buff[i];
-  }
-  sprintf(nmeaCode, "%s*%02X", buff, cs);
-
-  return nmeaCode;
 }
 
 char *nmeaEncodeCompass(char *nmeaCode, size_t length)
@@ -332,9 +235,9 @@ char *nmeaEncodeCompass(char *nmeaCode, size_t length)
   float headingDegrees = heading * 180 / PI;
   sprintf(buff, "$HCHDG,%03.1f,,,%.1f,%c", headingDegrees, declinationAngle * 180 / PI, ew_magdec);
 
-    u8x8.print("BRG");
-    u8x8.setCursor(0,14);
-    u8x8.printf(" %03.0f%c", headingDegrees,'\xB0');
+  u8x8.print("BRG");
+  u8x8.setCursor(0, 14);
+  u8x8.printf(" %03.0f%c", headingDegrees, '\xB0');
 
   for (int i = 1; i < strnlen(buff, sizeof(buff)); i++)
   {
@@ -344,12 +247,36 @@ char *nmeaEncodeCompass(char *nmeaCode, size_t length)
   return nmeaCode;
 }
 
-void udpsend(char *buff, bool serial)
+void sendData(char *buff, bool SerialOut, bool UdpOut, bool OLEDOut)
 {
-  udp.beginPacket(udpAddress1, udpPort);
-  udp.print(buff);
-  udp.endPacket();
-  if (serial)
+  if (SerialOut == true)
+  {
     Serial.println(buff);
+  }
+  if (UdpOut == true)
+  {
+    udp.beginPacket(udpAddress1, udpPort);
+    udp.print(buff);
+    udp.endPacket();
+  }
+  if (OLEDOut == true)
+  {
+    u8x8.setCursor(0, 0);
+    u8x8.print("Lat:");
+    u8x8.setCursor(0, 2);
+    u8x8.printf("%3d%c%02.5f'%c", gpsData.latdeg, '\xB0', gpsData.latmin, gpsData.ns);
+    u8x8.setCursor(0, 4);
+    u8x8.print("Lon:");
+    u8x8.setCursor(0, 6);
+    u8x8.printf("%3ld%c%02.5f'%c", gpsData.londeg, '\xB0', gpsData.lonmin, gpsData.ew);
+    u8x8.setCursor(0, 8);
+    u8x8.print("fix SIV pDOP Alt");
+    u8x8.setCursor(0, 10);
+    float dummyAlt = gpsData.altitude;
+    if (dummyAlt > 999)
+      dummyAlt = 999;
+    u8x8.printf(" %d  %2u  %4lu %3.0f", gpsData.fixtype, gpsData.SIV, gpsData.pDOP, dummyAlt);
+    u8x8.setCursor(0, 12);
+  }
   return;
 }
