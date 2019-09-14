@@ -77,20 +77,38 @@ HMC5883L compass;
 
 //End Compass section
 
+//OLED section
+#include <U8x8lib.h>
+U8X8_SH1107_PIMORONI_128X128_HW_I2C u8x8(/* reset=*/ 8);
+
+
 void setup()
 {
+  u8x8.begin();
+  u8x8.setFont(u8x8_font_8x13B_1x2_f);   
+  u8x8.clear();
+  u8x8.inverse();
+  u8x8.print("NMEA-UDP-Sender");
+  u8x8.setCursor(0,2);
+  u8x8.noInverse();
   Serial.begin(115200);
   while (!Serial)
     ; //Wait for user to open terminal
-
+  u8x8.print("Serial connected.");
+  u8x8.setCursor(0,4);
   Serial.println("NMEA-UDP-Sender start.");
   //Connect to the WiFi network
+  u8x8.print("Config Wifi AP");
+  u8x8.setCursor(0,6);
   Serial.println("Configuring access point...");
   //Create Access Point
   WiFi.softAP(ssid, password);
   delay(100);
   WiFi.softAPConfig(ip, ip, subnet);
   IPAddress myIP = WiFi.softAPIP();
+      u8x8.print("AP IP address: ");
+  u8x8.setCursor(0,8);
+  u8x8.print(myIP);
   Serial.print("AP IP address: ");
   Serial.println(myIP);
 
@@ -150,6 +168,7 @@ void setup()
   myGPS.setNavigationFrequency(5);
   myGPS.setAutoPVT(true, true);
   myGPS.saveConfiguration(); //Save the current settings to flash and BBR
+    u8x8.clear();
 }
 
 void loop()
@@ -190,11 +209,11 @@ char *nmeaEncodeGPS(int id, char *nmeaCode, size_t length)
   uint8_t dd = myGPS.getDay();
   uint8_t mm = myGPS.getMonth();
   uint16_t yy = myGPS.getYear() % 100;
-
-  int latdeg = (int)(latitude / 10000000);
+  int latdeg = abs((int)(latitude / 10000000));
   float latmin = (float)(latitude % 10000000) / 10000000 * 60;
-  int londeg = (int)(longitude / 10000000);
+  int londeg = abs((int)(longitude / 10000000));
   float lonmin = (float)(longitude % 10000000) / 10000000 * 60;
+
 
   //long geoidsep = myGPS.getGeoidSeparation(); too long to wait for polling (1sec) so ignored
 
@@ -228,6 +247,7 @@ char *nmeaEncodeGPS(int id, char *nmeaCode, size_t length)
   else
   {
     ns = 'S';
+    latmin*=(-1);
   }
   char ew = 'E';
   if (longitude >= 0)
@@ -237,8 +257,25 @@ char *nmeaEncodeGPS(int id, char *nmeaCode, size_t length)
   else
   {
     ew = 'W';
+    lonmin*=(-1);
   }
-  if (id == RMC)
+//    u8x8.clear();
+  u8x8.setCursor(0,0);
+    u8x8.print("Lat:");
+    u8x8.setCursor(0,2);
+    u8x8.printf("%3d%c%02.5f'%c",latdeg,'\xB0', latmin, ns);
+  u8x8.setCursor(0,4);
+    u8x8.print("Lon:");
+    u8x8.setCursor(0,6);
+    u8x8.printf("%3d%c%02.5f'%c",londeg, '\xB0',lonmin, ew);
+      u8x8.setCursor(0,8);
+    u8x8.print("fix SIV pDOP Alt");
+    u8x8.setCursor(0,10);
+    if(altitude>999)altitude=999;
+    u8x8.printf(" %d  %2u  %4lu %3.0f",fixtype, SIV, pDOP, altitude);
+        u8x8.setCursor(0,12);
+
+      if (id == RMC)
     snprintf(buff, sizeof(buff), "$GNRMC,%02u%02u%02u.%03u,A,%d%2.5f,%c,%d%2.5f,%c,%1.2f,%03.2f,%02u%02u%02u,,,%c", hour, minute, second, msecond, latdeg, latmin, ns, londeg, lonmin, ew, spdkt, cog, dd, mm, yy, fixRMC);
   if (id == GGA)
     snprintf(buff, sizeof(buff), "$GNGGA,%02u%02u%02u.%1u,%d%2.5f,%c,%d%2.5f,%c,%d,%u,%lu,%.1f,M,,M,,,", hour, minute, second, msecond / 100, latdeg, latmin, ns, londeg, lonmin, ew, fixGGA, SIV, pDOP, altitude);
@@ -294,6 +331,11 @@ char *nmeaEncodeCompass(char *nmeaCode, size_t length)
   // Convert to degrees
   float headingDegrees = heading * 180 / PI;
   sprintf(buff, "$HCHDG,%03.1f,,,%.1f,%c", headingDegrees, declinationAngle * 180 / PI, ew_magdec);
+
+    u8x8.print("BRG");
+    u8x8.setCursor(0,14);
+    u8x8.printf(" %03.0f%c", headingDegrees,'\xB0');
+
   for (int i = 1; i < strnlen(buff, sizeof(buff)); i++)
   {
     cs ^= buff[i];
