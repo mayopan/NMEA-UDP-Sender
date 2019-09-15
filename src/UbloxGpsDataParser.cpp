@@ -17,23 +17,23 @@ char *UbloxGPS::csCalc(char *buffin, size_t length)
     return cs;
 };
 
-void UbloxGPS::parse(SFE_UBLOX_GPS myGPS)
+void UbloxGPS::parse(SFE_UBLOX_GPS _gps)
 {
-    hour = myGPS.getHour();
-    minute = myGPS.getMinute();
-    second = myGPS.getSecond();
-    msecond = myGPS.getMillisecond();
-    latitude = myGPS.getLatitude();   // degrees * 10^7
-    longitude = myGPS.getLongitude(); // degrees * 10^7
-    fixtype = myGPS.getFixType();     //0: no fix 1: dead reckoning only 2: 2D-fix 3: 3D-fix 4: GNSS + dead reckoning combined 5: time only fix
-    SIV = myGPS.getSIV();
-    pDOP = myGPS.getPDOP();
-    altitude = (float)myGPS.getAltitudeMSL() / 1000; // mm->m
-    spdkt = (float)myGPS.getGroundSpeed() * 3600 / 1000000 / 1.6;
-    cog = (float)myGPS.getHeading() / 100000;
-    dd = myGPS.getDay();
-    mm = myGPS.getMonth();
-    yy = myGPS.getYear() % 100;
+    hour = _gps.getHour();
+    minute = _gps.getMinute();
+    second = _gps.getSecond();
+    msecond = _gps.getMillisecond();
+    latitude = _gps.getLatitude();   // degrees * 10^7
+    longitude = _gps.getLongitude(); // degrees * 10^7
+    fixtype = _gps.getFixType();     //0: no fix 1: dead reckoning only 2: 2D-fix 3: 3D-fix 4: GNSS + dead reckoning combined 5: time only fix
+    SIV = _gps.getSIV();
+    pDOP = _gps.getPDOP();
+    altitude = (float)_gps.getAltitudeMSL() / 1000; // mm->m
+    spdkt = (float)_gps.getGroundSpeed() * 3600 / 1000000 / 1.6;
+    cog = (float)_gps.getHeading() / 100000;
+    dd = _gps.getDay();
+    mm = _gps.getMonth();
+    yy = _gps.getYear() % 100;
 
     latdeg = (int)(latitude / 10000000);
     latmin = (float)(latitude % 10000000) / 10000000 * 60;
@@ -80,4 +80,58 @@ void UbloxGPS::parse(SFE_UBLOX_GPS myGPS)
     snprintf(nmeaGGA, sizeof(nmeaGGA), "$GNGGA,%02u%02u%02u.%1u,%d%2.5f,%c,%ld%2.5f,%c,%d,%u,%lu,%.1f,M,,M,,,",
              hour, minute, second, msecond / 100, latdeg, latmin, ns, londeg, lonmin, ew, fixGGA, SIV, pDOP, altitude);
     strcat(nmeaGGA, csCalc(nmeaGGA, sizeof(nmeaGGA)));
+};
+
+char *HMC5883Compass::csCalc(char *buffin, size_t length)
+{
+
+    char csDigit = 0;
+    for (int i = 1; i < strnlen(buffin, length); i++)
+    {
+        csDigit ^= buffin[i];
+    }
+    sprintf(cs, "*%02X", csDigit);
+    return cs;
+};
+
+void HMC5883Compass::parse(HMC5883L _compass)
+{
+    //Compass data polling
+    Vector norm = _compass.readNormalize();
+
+    // Calculate heading
+    float heading = atan2(norm.XAxis, norm.YAxis);
+
+    // Set declination angle on your location and fix heading
+    // You can find your declination on: http://magnetic-declination.com/
+    // (+) Positive or (-) for negative
+    // For Bytom / Poland declination angle is 4'26E (positive)
+    // Formula: (deg + (min / 60.0)) / (180 / M_PI);
+    float declinationAngle = 0.13;
+    char ew_magdec = 'E';
+    if (declinationAngle >= 0)
+    {
+        ew_magdec = 'W';
+    }
+    else
+    {
+        ew_magdec = 'E';
+    }
+    heading += declinationAngle;
+
+    // Correct for heading < 0deg and heading > 360deg
+    if (heading < 0)
+    {
+        heading += 2 * PI;
+    }
+
+    if (heading > 2 * PI)
+    {
+        heading -= 2 * PI;
+    }
+
+    // Convert to degrees
+    headingDegrees = heading * 180 / PI;
+    sprintf(nmeaHDG, "$HCHDG,%03.1f,,,%.1f,%c", headingDegrees, declinationAngle * 180 / PI, ew_magdec);
+    strcat(nmeaHDG, csCalc(nmeaHDG, sizeof(nmeaHDG)));
 };

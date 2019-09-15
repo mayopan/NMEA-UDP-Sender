@@ -60,8 +60,6 @@ WiFiUDP udp;
 
 //Send NMEA data with checksum on UDP
 
-char *nmeaEncodeCompass(char *nmeaCode, size_t length);
-
 #include "UbloxGpsDataParser.h"
 
 UbloxGPS gpsData;
@@ -73,6 +71,7 @@ void sendData(char *buff, bool SerialOut, bool UdpOut, bool OLEDOut);
 #include <HMC5883L.h>
 
 HMC5883L compass;
+HMC5883Compass compassData;
 
 //End Compass section
 
@@ -93,8 +92,7 @@ void setup()
   u8x8.setCursor(0, 2);
   u8x8.noInverse();
   Serial.begin(115200);
-  while (!Serial)
-    ; //Wait for user to open terminal
+  while (!Serial); //Wait for user to open terminal
   u8x8.print("Serial connected.");
   u8x8.setCursor(0, 4);
   Serial.println("NMEA-UDP-Sender start.");
@@ -113,7 +111,7 @@ void setup()
   Serial.print("AP IP address: ");
   Serial.println(myIP);
 
-  /* Initialise the mag sensor */
+  /*Initialize the mag sensor */
   while (!compass.begin())
   {
     Serial.println("Could not find a valid HMC5883L sensor, check wiring!");
@@ -151,12 +149,14 @@ void setup()
     {
       Serial.println("GPS: connected at 9600 baud, switching to 115200");
       myGPS.setSerialRate(115200);
-      delay(1000);
+      delay(400);
     }
     else
     {
+
       myGPS.hardReset();
-      delay(2000); //Wait a bit before trying again to limit the Serial output
+      Serial.println("GPS: hard reset!");
+      delay(1000); //Wait a bit before trying again to limit the Serial output
     }
   } while (1);
   udp.beginPacket(udpAddress1, udpPort);
@@ -175,7 +175,7 @@ void setup()
 
 void loop()
 {
-  // Position solution updates every 200ms. So polling every 100ms -> 100ms latancy in worst case.
+  // Position solution updates every 200ms. So polling every 100ms -> 100ms latency in worst case.
   if (millis() - lastTime > Polling_Interval)
   {
     lastTime = millis(); //Update the timer
@@ -183,68 +183,13 @@ void loop()
     // When GPS has new solution, start encoding position data to NMEA sentences
     if (myGPS.getPVT())
     {
-      char nmeabuff[90];
+      compassData.parse(compass);
       gpsData.parse(myGPS);
       sendData(gpsData.nmeaRMC, true, true, true);
       sendData(gpsData.nmeaGGA, true, true, false);
-      nmeaEncodeCompass(nmeabuff, sizeof(nmeabuff));
-      sendData(nmeabuff, true, true, false);
+      sendData(compassData.nmeaHDG, true, true, false);
     }
   }
-}
-
-char *nmeaEncodeCompass(char *nmeaCode, size_t length)
-{
-  char buff[length];
-  char cs = 0;
-  //Compass data polling
-  Vector norm = compass.readNormalize();
-
-  // Calculate heading
-  float heading = atan2(norm.XAxis, norm.YAxis);
-
-  // Set declination angle on your location and fix heading
-  // You can find your declination on: http://magnetic-declination.com/
-  // (+) Positive or (-) for negative
-  // For Bytom / Poland declination angle is 4'26E (positive)
-  // Formula: (deg + (min / 60.0)) / (180 / M_PI);
-  float declinationAngle = 0.13;
-  char ew_magdec = 'E';
-  if (declinationAngle >= 0)
-  {
-    ew_magdec = 'W';
-  }
-  else
-  {
-    ew_magdec = 'E';
-  }
-  heading += declinationAngle;
-
-  // Correct for heading < 0deg and heading > 360deg
-  if (heading < 0)
-  {
-    heading += 2 * PI;
-  }
-
-  if (heading > 2 * PI)
-  {
-    heading -= 2 * PI;
-  }
-
-  // Convert to degrees
-  float headingDegrees = heading * 180 / PI;
-  sprintf(buff, "$HCHDG,%03.1f,,,%.1f,%c", headingDegrees, declinationAngle * 180 / PI, ew_magdec);
-
-  u8x8.print("BRG");
-  u8x8.setCursor(0, 14);
-  u8x8.printf(" %03.0f%c", headingDegrees, '\xB0');
-
-  for (int i = 1; i < strnlen(buff, sizeof(buff)); i++)
-  {
-    cs ^= buff[i];
-  }
-  sprintf(nmeaCode, "%s*%02X", buff, cs);
-  return nmeaCode;
 }
 
 void sendData(char *buff, bool SerialOut, bool UdpOut, bool OLEDOut)
@@ -277,6 +222,9 @@ void sendData(char *buff, bool SerialOut, bool UdpOut, bool OLEDOut)
       dummyAlt = 999;
     u8x8.printf(" %d  %2u  %4lu %3.0f", gpsData.fixtype, gpsData.SIV, gpsData.pDOP, dummyAlt);
     u8x8.setCursor(0, 12);
+    u8x8.print("BRG");
+    u8x8.setCursor(0, 14);
+    u8x8.printf(" %03.0f%c", compassData.headingDegrees, '\xB0');
   }
   return;
 }

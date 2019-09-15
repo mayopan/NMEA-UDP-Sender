@@ -60,20 +60,20 @@ It polls position data 10 times per second and casts to the air.
 # Usage
  
 1. Power the ESP32 module outside, immediately it starts access point (192.168.20.1) and sending NMEA sentence on UDP.
-1. Open Wifi configuration on your smartphone or tablet, and find "ESP32" and connect it. Your phone IP may be 192.168.20.2.
-2. To check the NMEA0183 data flow, use some UDP client app, bind UDP port 2947.
+2. Open Wifi configuration on your smartphone or tablet, and find "ESP32" and connect it. Your phone IP may be 192.168.20.2.
+3. To check the NMEA0183 data flow, use some UDP client app, bind UDP port 2947.
    1. GPS module warms up (grabs satellites data and calc self position) in 30 secs for the first time.
    2. When GPS module fixed precise position, you can see "A" character instead of "V" in NMEA0183 sentence.
 ```bash
-$GNRMC,165939.900,A,35@@.29033,N,139@@.52259,E,56.59,199.06,070919,,,A*48
-$GNGLL,35@@.29033,N,139@@.52259,E,165939.90,A*1C
-$GNRMC,165940.100,A,35@@.28830,N,139@@.52089,E,56.57,199.08,070919,,,A*4B
-$GNGLL,35@@.28830,N,139@@.52089,E,165940.10,A*1F
-$GNRMC,165940.300,A,35@@.28588,N,139@@.51975,E,56.58,199.07,070919,,,A*4E
-$GNGLL,35@@.28588,N,139@@.51975,E,165940.30,A*1A
+$GNRMC,181128.200,A,3027.53674,N,13746.46687,E,0.00,116.76,140919,,,V*6C
+$GNGGA,181128.2,3027.53674,N,13746.46687,E,0,0,9999,5421.9,M,,M,,,*5C
+$HCHDG,31.9,,,7.4,W*03
+$GNRMC,181128.400,A,3027.53674,N,13746.46687,E,0.00,116.76,140919,,,V*6A
+$GNGGA,181128.4,3027.53674,N,13746.46687,E,0,0,9999,5421.9,M,,M,,,*5A
+$HCHDG,31.6,,,7.4,W*0C
 ```
 At this moment, it sends RMC and GLL sentences. *'@@' is masked to protect my privacy ;)
-1. Only one client can bind to the specific port. So close the client app before making OpenCPN to connect.
+4. Only one client can bind to the specific port. So close the client app before making OpenCPN to connect.
 * Refer to [OpenCPN docs](https://opencpn.org/wiki/dokuwiki/doku.php?id=opencpn:opencpn_user_manual:options_setting:connections) for configuration of connecting external NMEA0183 data flow in OpenCPN.
 
  
@@ -84,7 +84,8 @@ I struggled to fix it for days but I couldn't. Welcome your suggestions if you c
 I will add new function below.
 * Add GGA sentence ... Done!
 * Add HDM sentence with mag compass output ... Done!
-* OLED display output
+* OLED display output ... Text base is Done!
+* OLED display output (Graphical)
 * Seatalk - NMEA0183 bi-directional communication
 * small issue: When reconnects Wifi after once disconnected,  SoftAP atatches new IP, so UDP connection is lost. 
 
