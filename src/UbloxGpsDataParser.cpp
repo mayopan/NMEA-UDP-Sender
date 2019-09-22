@@ -135,3 +135,21 @@ void HMC5883Compass::parse(HMC5883L _compass)
     sprintf(nmeaHDG, "$HCHDG,%03.1f,,,%.1f,%c", headingDegrees, declinationAngle * 180 / PI, ew_magdec);
     strcat(nmeaHDG, csCalc(nmeaHDG, sizeof(nmeaHDG)));
 };
+
+Vector2D Vector2D::rotateDeg(double deg)
+{
+    Vector2D new_vec;
+    new_vec.x = x * cos(radians(deg)) + y * sin(radians(deg));
+    new_vec.y = -x * sin(radians(deg)) + y * cos(radians(deg));
+    //x = other.x;
+    //y = other.y;
+    return new_vec;
+};
+
+Vector2D operator+(Vector2D pt, Vector2D mv)
+{
+    Vector2D new_pt;
+    new_pt.x = pt.x + mv.x;
+    new_pt.y = pt.y + mv.y;
+    return new_pt;
+}
