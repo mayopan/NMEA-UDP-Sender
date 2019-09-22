@@ -67,7 +67,7 @@ UbloxGPS gpsData;
 void sendData(char *buff, bool SerialOut, bool UdpOut, bool OLEDOut);
 
 //Compass section
-#include <Wire.h>
+//#include <Wire.h>
 #include <HMC5883L.h>
 
 HMC5883L compass;
@@ -76,38 +76,38 @@ HMC5883Compass compassData;
 //End Compass section
 
 //OLED section
-#include <U8x8lib.h>
-U8X8_SH1107_PIMORONI_128X128_HW_I2C u8x8(/* reset=*/8);
+#include <U8g2lib.h>
+U8G2_SH1107_PIMORONI_128X128_1_HW_I2C u8g2(U8G2_R0, /* reset=*/8);
 
 unsigned long lastTime = 0;                 //Simple local timer.
 const unsigned long Polling_Interval = 100; // ms = 10Hz It's not sampling interval. It should be faster than GPS sampling.
 
 void setup()
 {
-  u8x8.begin();
-  u8x8.setFont(u8x8_font_8x13B_1x2_f);
-  u8x8.clear();
-  u8x8.inverse();
-  u8x8.print("NMEA-UDP-Sender");
-  u8x8.setCursor(0, 2);
-  u8x8.noInverse();
+  u8g2.begin();
+  u8g2.setFontMode(1);
+  u8g2.setFont(u8g2_font_crox2hb_tr);
+  u8g2.setCursor(0, 16);
+  //  u8g2.print("NMEA-UDP-Sender");
+
   Serial.begin(115200);
-  while (!Serial); //Wait for user to open terminal
-  u8x8.print("Serial connected.");
-  u8x8.setCursor(0, 4);
+  while (!Serial)
+    ;   //Wait for user to open terminal
+        //  u8x8.print("Serial connected.");
+        //  u8x8.setCursor(0, 4);
   Serial.println("NMEA-UDP-Sender start.");
   //Connect to the WiFi network
-  u8x8.print("Config Wifi AP");
-  u8x8.setCursor(0, 6);
+  //  u8x8.print("Config Wifi AP");
+  //  u8x8.setCursor(0, 6);
   Serial.println("Configuring access point...");
   //Create Access Point
   WiFi.softAP(ssid, password);
   delay(100);
   WiFi.softAPConfig(ip, ip, subnet);
   IPAddress myIP = WiFi.softAPIP();
-  u8x8.print("AP IP address: ");
-  u8x8.setCursor(0, 8);
-  u8x8.print(myIP);
+  //  u8x8.print("AP IP address: ");
+  //  u8x8.setCursor(0, 8);
+  //  u8x8.print(myIP);
   Serial.print("AP IP address: ");
   Serial.println(myIP);
 
@@ -170,7 +170,7 @@ void setup()
   myGPS.setAutoPVT(true, true);
   myGPS.saveConfiguration(); //Save the current settings to flash and BBR
   delay(1000);
-  u8x8.clear();
+  //u8x8.clear();
 }
 
 void loop()
@@ -194,6 +194,12 @@ void loop()
 
 void sendData(char *buff, bool SerialOut, bool UdpOut, bool OLEDOut)
 {
+  Vector2D arrow_l[3] = {{0, 5}, {-6, 12}, {0, -15}};
+
+  Vector2D arrow_r[3] = {{0, 5}, {6, 12}, {0, -15}};
+  Vector2D arrow_now_l[3], arrow_now_r[3], tick[2] = {{0, -12}, {0, -15}};
+  char buff_u8g2[16];
+  u8g2_uint_t length;
   if (SerialOut == true)
   {
     Serial.println(buff);
@@ -206,25 +212,130 @@ void sendData(char *buff, bool SerialOut, bool UdpOut, bool OLEDOut)
   }
   if (OLEDOut == true)
   {
-    u8x8.setCursor(0, 0);
-    u8x8.print("Lat:");
-    u8x8.setCursor(0, 2);
-    u8x8.printf("%3d%c%02.5f'%c", gpsData.latdeg, '\xB0', gpsData.latmin, gpsData.ns);
-    u8x8.setCursor(0, 4);
-    u8x8.print("Lon:");
-    u8x8.setCursor(0, 6);
-    u8x8.printf("%3ld%c%02.5f'%c", gpsData.londeg, '\xB0', gpsData.lonmin, gpsData.ew);
-    u8x8.setCursor(0, 8);
-    u8x8.print("fix SIV pDOP Alt");
-    u8x8.setCursor(0, 10);
-    float dummyAlt = gpsData.altitude;
-    if (dummyAlt > 999)
-      dummyAlt = 999;
-    u8x8.printf(" %d  %2u  %4lu %3.0f", gpsData.fixtype, gpsData.SIV, gpsData.pDOP, dummyAlt);
-    u8x8.setCursor(0, 12);
-    u8x8.print("BRG");
-    u8x8.setCursor(0, 14);
-    u8x8.printf(" %03.0f%c", compassData.headingDegrees, '\xB0');
+    u8g2.firstPage();
+    do
+    {
+      for (int i = 1; i < 128 / 16; i++)
+      {
+        u8g2.setDrawColor(1);
+        if (i == 5 || i == 6)
+        {
+          u8g2.drawHLine(16 * 3, i * 16, 127 - 16 * 3);
+        }
+        else
+        {
+          if (i == 2 || i == 4 || i == 7)
+          {
+            u8g2.drawHLine(0, i * 16, 127);
+          }
+        }
+      }
+      for (int i = 0; i < 3; i++)
+      {
+        arrow_now_l[i] = arrow_l[i].rotateDeg(-compassData.headingDegrees) + center;
+        arrow_now_r[i] = arrow_r[i].rotateDeg(-compassData.headingDegrees) + center;
+      }
+
+      u8g2.drawTriangle(arrow_now_l[0].x, arrow_now_l[0].y, arrow_now_l[1].x, arrow_now_l[1].y, arrow_now_l[2].x, arrow_now_l[2].y);
+      u8g2.drawTriangle(arrow_now_r[0].x, arrow_now_r[0].y, arrow_now_r[1].x, arrow_now_r[1].y, arrow_now_r[2].x, arrow_now_r[2].y);
+      u8g2.drawCircle(center.x, center.y, 16);
+      u8g2.setFont(u8g2_font_crox1hb_tr);
+      u8g2.drawGlyph(center.x - 4, center.y-15, 'N');
+      u8g2.drawGlyph(center.x - 4, center.y+16+8, 'S');
+      u8g2.drawGlyph(center.x +16, center.y+4, 'E');
+      u8g2.drawGlyph(center.x -16-8, center.y+4, 'W');
+      for (int i = 0; i < 16; i++)
+      {
+        Vector2D startPt, endPt;
+        startPt = tick[0].rotateDeg(i * 360.0 / 12) + center;
+        endPt = tick[1].rotateDeg(i * 360.0 / 12) + center;
+        u8g2.drawLine(startPt.x, startPt.y, endPt.x, endPt.y);
+      }
+
+      u8g2.setCursor(0, 15);
+      u8g2.setFont(u8g2_font_crox2hb_tr);
+      u8g2.print("DATE");
+      u8g2.setCursor(0, 31);
+      u8g2.print("TIME");
+      u8g2.setCursor(48, 79);
+      u8g2.printf("BRG");
+      u8g2.setCursor(48, 95);
+      u8g2.printf("COG");
+      u8g2.setCursor(48, 111);
+      u8g2.printf("SOG");
+
+      u8g2.setFont(u8g2_font_crox3hb_tf);
+      snprintf(buff_u8g2, 16, "20%02u.%2u.%2u", gpsData.yy, gpsData.mm, gpsData.dd);
+      length = u8g2.getStrWidth(buff_u8g2);
+      u8g2.setCursor(128 - length, 15);
+      u8g2.print(buff_u8g2);
+      snprintf(buff_u8g2, 16, "%02u:%02u:%02u", gpsData.hour, gpsData.minute, gpsData.second);
+      length = u8g2.getStrWidth(buff_u8g2);
+      u8g2.setCursor(128 - length, 31);
+      u8g2.print(buff_u8g2);
+      u8g2.setCursor(0, 55);
+      u8g2.setFont(u8g2_font_open_iconic_www_2x_t);
+      u8g2.printf("%c", '\x47'); //gps
+      u8g2.setFont(u8g2_font_crox3hb_tf);
+      snprintf(buff_u8g2, 16, "%3d%c%02.4f'%c", gpsData.latdeg, '\xB0', gpsData.latmin, gpsData.ns);
+      length = u8g2.getStrWidth(buff_u8g2);
+      u8g2.setCursor(128 - length, 47);
+      u8g2.printf(buff_u8g2);
+      snprintf(buff_u8g2, 16, "%3ld%c%02.4f'%c", gpsData.londeg, '\xB0', gpsData.lonmin, gpsData.ew);
+      length = u8g2.getStrWidth(buff_u8g2);
+      u8g2.setCursor(128 - length, 63);
+      u8g2.printf(buff_u8g2);
+
+      snprintf(buff_u8g2, 16, "%03ld%c", long(compassData.headingDegrees), '\xb0');
+      length = u8g2.getStrWidth(buff_u8g2);
+      u8g2.setCursor(128 - length, 79);
+      u8g2.printf(buff_u8g2);
+
+      snprintf(buff_u8g2, 16, "%03ld%c", long(gpsData.cog), '\xb0');
+      length = u8g2.getStrWidth(buff_u8g2);
+      u8g2.setCursor(128 - length, 95);
+      u8g2.printf(buff_u8g2);
+
+      snprintf(buff_u8g2, 16, "%2.1fkt", gpsData.spdkt);
+
+      length = u8g2.getStrWidth(buff_u8g2);
+      u8g2.setCursor(128 - length, 111);
+      u8g2.printf(buff_u8g2);
+      //      u8g2.setCursor(0, 128);
+      //     u8g2.setFont(u8g2_font_open_iconic_check_2x_t);
+      //      u8g2.drawGlyph(96, 128, 0x42);//out
+      u8g2.setFont(u8g2_font_open_iconic_www_2x_t);
+      u8g2.drawGlyph(0, 128, 0x46);  //compass
+                                     //     u8g2.setCursor(16, 128);
+                                     //    u8g2.printf("%c%c%c", '\x46', '\x51', '\x4e'); //compass,wifi,,earth
+      u8g2.drawGlyph(88, 128, 0x47); //gps
+      u8g2.setFont(u8g2_font_crox3hb_tf);
+      u8g2.setCursor(16, 128);
+      switch (gpsData.fixtype) //0=no fix, 1=dead reckoning, 2=2D, 3=3D, 4=GNSS, 5=Time fix
+      {
+      case 0:
+        snprintf(buff_u8g2, 16, "x");
+        break;
+      case 1:
+        snprintf(buff_u8g2, 16, "x");
+        break;
+      case 2:
+        snprintf(buff_u8g2, 16, "2D");
+        break;
+      case 3:
+        snprintf(buff_u8g2, 16, "3D");
+        break;
+      case 4:
+        snprintf(buff_u8g2, 16, "GNSS");
+        break;
+      case 5:
+        snprintf(buff_u8g2, 16, "Time");
+        break;
+      }
+      u8g2.printf("%s", buff_u8g2);
+      u8g2.setCursor(104, 128);
+      u8g2.printf("%u", gpsData.SIV);
+    } while (u8g2.nextPage());
   }
   return;
 }
