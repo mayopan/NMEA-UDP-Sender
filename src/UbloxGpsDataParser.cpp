@@ -34,6 +34,10 @@ void UbloxGPS::parse(SFE_UBLOX_GPS _gps)
     dd = _gps.getDay();
     mm = _gps.getMonth();
     yy = _gps.getYear() % 100;
+    solution = _gps.getCarrierSolutionType();
+    hAcc = _gps.getHorizontalAccuracy();
+    vAcc = _gps.getVerticalAccuracy();
+    magDec = _gps.getmagDecline();
 
     latdeg = (int)(latitude / 10000000);
     latmin = (float)(latitude % 10000000) / 10000000 * 60;
