@@ -85,6 +85,8 @@ U8G2_SH1107_PIMORONI_128X128_1_HW_I2C u8g2(U8G2_R0, /* reset=*/8);
 uint8_t u8log_buffer[U8LOG_WIDTH * U8LOG_HEIGHT];
 U8G2LOG u8g2log;
 
+#include "satteliteicon.xbm"
+
 unsigned long lastTime = 0;                 //Simple local timer.
 const unsigned long Polling_Interval = 100; // ms = 10Hz It's not sampling interval. It should be faster than GPS sampling.
 
@@ -203,7 +205,7 @@ void setup()
   myGPS.setAutoPVT(true, true);
   myGPS.saveConfiguration(); //Save the current settings to flash and BBR
   u8g2log.println("GPS config done.");
-  delay(10000);
+  delay(5000);
 }
 
 void loop()
@@ -342,51 +344,58 @@ void sendData(char *buff, bool SerialOut, bool UdpOut, bool OLEDOut)
       //     u8g2.setFont(u8g2_font_open_iconic_check_2x_t);
       //      u8g2.drawGlyph(96, 128, 0x42);//out
       u8g2.setFont(u8g2_font_open_iconic_www_2x_t);
-      u8g2.drawGlyph(0, 128, 0x46);  //position fix (arrow icon)
-      u8g2.drawGlyph(64, 128, 0x51); //Wifi
-      u8g2.drawGlyph(88, 128, 0x47); //sattelite in view (gps icon)
-      u8g2.setFont(u8g2_font_crox3hb_tf);
+      u8g2.drawGlyph(0, 128, 0x46);                                                          //position fix (arrow icon)
+                                                                                             /*      u8g2.setFont(u8g2_font_7x14_tf);
       u8g2.setCursor(16, 128);
-      switch (gpsData.fixtype) //0=no fix, 1=dead reckoning, 2=2D, 3=3D, 4=GNSS, 5=Time fix
+      u8g2.printf("hac%lum,vac%lum",gpsData.hAcc/1000,gpsData.vAcc/1000);
+      */
+      u8g2.drawGlyph(78, 128, 0x51);                                                         //Wifi
+      u8g2.drawXBMP(102, 113, u8g2_satellite_width, u8g2_satellite_height, u8g2_satellite_bits); //sattelite icon
+                                                                                             //      u8g2.drawGlyph(102, 128, 0x47); //sattelite in view (gps icon)
+      u8g2.setFont(u8g2_font_7x14_tr);
+      u8g2.setCursor(16, 128);
+      uint8_t fix = gpsData.fixtype;
+      if (fix == 2) //0=no fix, 1=dead reckoning, 2=2D, 3=3D, 4=GNSS, 5=Time fix
       {
-      case 0:
-        snprintf(buff_u8g2, 16, "x");
-        break;
-      case 1:
-        snprintf(buff_u8g2, 16, "x");
-        break;
-      case 2:
         snprintf(buff_u8g2, 16, "2D");
-        break;
-      case 3:
-        snprintf(buff_u8g2, 16, "3D");
-        break;
-      case 4:
-        snprintf(buff_u8g2, 16, "GNSS");
-        break;
-      case 5:
-        snprintf(buff_u8g2, 16, "Time");
-        break;
       }
+      else if (fix == 3)
+      {
+        //        snprintf(buff_u8g2, 16, "3D-%u", gpsData.solution);
+        if (gpsData.solution == 2)
+        {
+          snprintf(buff_u8g2, 16, "Dgps");
+        }
+        else
+        {
+          snprintf(buff_u8g2, 16, "3D");
+        }
+      }
+      else
+      {
+        snprintf(buff_u8g2, 16, "x");
+      }
+
       u8g2.printf("%s", buff_u8g2);
 
       u8g2.setFont(u8g2_font_open_iconic_app_2x_t);
       u8g2.drawGlyph(40, 128, 0x46); //compass
-      u8g2.setFont(u8g2_font_crox3hb_tf);
-      u8g2.setCursor(56, 128);
+      u8g2.setFont(u8g2_font_7x14_tf);
+      u8g2.setCursor(58, 128);
       if (compassConnected)
       {
-        u8g2.print("o");
+        snprintf(buff_u8g2, 16, "%ld%c", gpsData.magDec / 100, '\xb0');
+        u8g2.print(buff_u8g2);
       }
       else
       {
         u8g2.print("x");
       }
 
-      u8g2.setCursor(80, 128);
+      u8g2.setCursor(96, 128);
       u8g2.print(WiFi.softAPgetStationNum());
 
-      u8g2.setCursor(104, 128);
+      u8g2.setCursor(118, 128);
       u8g2.printf("%u", gpsData.SIV);
     } while (u8g2.nextPage());
   }
