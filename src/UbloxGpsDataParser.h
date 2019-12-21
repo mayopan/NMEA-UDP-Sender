@@ -35,8 +35,6 @@ public:
     int fixGGA = 0;
 
     uint8_t solution; //0=no fix, 1=valid fix within DOP, 2,3=differential corrections were applied
-    uint32_t hAcc, vAcc;
-    long magDec;
 
     char *csCalc(char *buffin, size_t length);
     void parse(SFE_UBLOX_GPS myGPS);
