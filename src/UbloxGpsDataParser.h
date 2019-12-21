@@ -2,11 +2,15 @@
 #define UBLOX_GPS_DATA_PARSER_H
 
 #ifndef SPARKFUN_UBLOX_ARDUINO_LIBRARY_H
-#include <SparkFun_Ublox_Arduino_Library.h>
+#include "SparkFun_Ublox_Arduino_Librarymod.h"
 #endif
 
 #ifndef HMC5883L
 #include <HMC5883L.h>
+#endif
+
+#ifndef QMC5883L
+#include <QMC5883L.h>
 #endif
 
 class UbloxGPS
@@ -38,7 +42,7 @@ public:
     void parse(SFE_UBLOX_GPS myGPS);
 };
 
-class HMC5883Compass
+class Compass
 {
 private:
     Vector norm;
@@ -52,11 +56,12 @@ private:
 public:
     char nmeaHDG[90];
     float heading, headingDegrees;
-    float declinationAngle = 0.13;
+    int16_t x_offset, y_offset, x_max, x_min, y_max, y_min;
+    const float declinationAngle = 0.13;
     char ew_magdec = 'E';
     char cs[4];
     char *csCalc(char *buffin, size_t length);
-    void parse(HMC5883L _compass);
+    void parse(HMC5883L _compass, QMC5883L _qmc_compass, int compass_selector);
 };
 
 class Vector2D

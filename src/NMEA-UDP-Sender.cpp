@@ -25,10 +25,11 @@
   Connect the U-Blox serial RX pin to ESP32 devkitC pin 17
   Open the serial monitor at 115200 baud to see the output
 */
+#define MAX_PAYLOAD_SIZE 300
 
 #include <Arduino.h>
 
-#include "SparkFun_Ublox_Arduino_Library.h" //http://librarymanager/All#SparkFun_Ublox_GPS
+#include <SparkFun_Ublox_Arduino_Library.h> //http://librarymanager/All#SparkFun_Ublox_GPS
 SFE_UBLOX_GPS myGPS;
 
 /*-----Wifi section----------------------------*/
@@ -68,12 +69,17 @@ void sendData(char *buff, bool SerialOut, bool UdpOut, bool OLEDOut);
 
 //Compass section
 //#include <Wire.h>
+const int NO_COMPASS = 0;
+const int HMC = 1;
+const int QMC = 2;
+int compass_selector = HMC;
+Compass compassData;
+
 #include <HMC5883L.h>
-
 HMC5883L compass;
-HMC5883Compass compassData;
 
-boolean compassConnected = true;
+#include <QMC5883L.h>
+QMC5883L qmc_compass;
 
 //End Compass section
 
@@ -123,20 +129,37 @@ void setup()
   /*Initialize the mag sensor */
   while (!compass.begin())
   {
-    Serial.println("Could not find a valid HMC5883L sensor, check wiring!");
-    delay(500);
+    Serial.println("Could not find a valid HMC5883L sensor.");
+    delay(100);
     breakCounter++;
-    if (breakCounter > 4)
+    if (breakCounter > 2)
     {
-      Serial.println("Compass function is disabled.");
-      u8g2log.println("Compass is NA.");
-      compassConnected = false;
+      Serial.println("Look for QMC5883L sensor.");
+      u8g2log.println("HMC compass NA");
+      compass_selector = QMC;
       break;
     }
   }
-  if (compassConnected == true)
+  qmc_compass.init();
+  qmc_compass.resetCalibration();
+  delay(100);
+
+  while (qmc_compass.ready() != 1)
   {
-    u8g2log.println("Compass Connected");
+    Serial.println("Could not find a valid QMC5883L sensor, check wiring!");
+    delay(100);
+    breakCounter++;
+    if (breakCounter > 2)
+    {
+      Serial.println("Compass function is disabled.");
+      u8g2log.println("Compass is NA.");
+      compass_selector = NO_COMPASS;
+      break;
+    }
+  }
+  if (compass_selector == HMC)
+  {
+    u8g2log.println("HMC compass ready.");
     // Set measurement range
     compass.setRange(HMC5883L_RANGE_1_3GA);
 
@@ -152,6 +175,13 @@ void setup()
     // Set calibration offset. See HMC5883L_calibration.ino
     compass.setOffset(0, 0);
     u8g2log.println("Compass config set.");
+  }
+  else if (compass_selector == QMC)
+  {
+//    qmc_compass.setRange(8);
+//    qmc_compass.setSamplingRate(50);
+//    qmc_compass.setOversampling(64);
+    u8g2log.println("QMC compass ready.");
   }
 
   //Assume that the U-Blox GPS is running at 9600 baud (the default) or at 115200 baud.
@@ -187,25 +217,26 @@ void setup()
   udp.beginPacket(udpAddress1, udpPort);
   udp.print("GPS serial Connected @baud 115200");
   udp.endPacket();
+
+//  myGPS.getModuleInfo();
   Serial.print(F("Version: "));
   u8g2log.print("Protcol Ver: ");
   byte versionHigh = myGPS.getProtocolVersionHigh();
-  delay(1000);
   Serial.print(versionHigh);
   u8g2log.print(versionHigh);
   Serial.print(".");
   u8g2log.print(".");
   byte versionLow = myGPS.getProtocolVersionLow();
-  delay(1000);
   Serial.println(versionLow);
   u8g2log.println(versionLow);
+
   myGPS.setUART1Output(COM_TYPE_UBX); //Set the UART port to output UBX only
   myGPS.setI2COutput(COM_TYPE_UBX);   //Set the I2C port to output UBX only (turn off NMEA noise)
   myGPS.setNavigationFrequency(5);
   myGPS.setAutoPVT(true, true);
   myGPS.saveConfiguration(); //Save the current settings to flash and BBR
   u8g2log.println("GPS config done.");
-  delay(5000);
+//  delay(5000);
 }
 
 void loop()
@@ -222,13 +253,31 @@ void loop()
       gpsData.parse(myGPS);
       sendData(gpsData.nmeaRMC, true, true, true);
       sendData(gpsData.nmeaGGA, true, true, false);
-      if (compassConnected == true)
-      {
-        compassData.parse(compass);
-        sendData(compassData.nmeaHDG, true, true, false);
-      }
+      compassData.parse(compass, qmc_compass, compass_selector);
+      sendData(compassData.nmeaHDG, true, true, false);
+    }
+    else
+    {
     }
   }
+}
+
+void compass_calib()
+{
+  int16_t x,y,z,t;
+  qmc_compass.readRaw(&x,&y,&z,&t);
+  if(compassData.x_max<x)compassData.x_max=x;
+  if(compassData.x_min>x)compassData.x_min=x;
+  if(compassData.x_max<x)compassData.y_max=y;
+  if(compassData.x_min>x)compassData.y_min=y;
+  compassData.x_offset=(compassData.x_max+compassData.x_min)/2;
+  compassData.y_offset=(compassData.y_max+compassData.y_min)/2;
+  
+  u8g2.firstPage();
+    do
+    {
+
+    } while (u8g2.nextPage());
 }
 
 void sendData(char *buff, bool SerialOut, bool UdpOut, bool OLEDOut)
@@ -344,14 +393,13 @@ void sendData(char *buff, bool SerialOut, bool UdpOut, bool OLEDOut)
       //     u8g2.setFont(u8g2_font_open_iconic_check_2x_t);
       //      u8g2.drawGlyph(96, 128, 0x42);//out
       u8g2.setFont(u8g2_font_open_iconic_www_2x_t);
-      u8g2.drawGlyph(0, 128, 0x46);                                                          //position fix (arrow icon)
-                                                                                             /*      u8g2.setFont(u8g2_font_7x14_tf);
+      u8g2.drawGlyph(0, 128, 0x46);                      //position fix (arrow icon)
+/*      u8g2.setFont(u8g2_font_7x14_tf);
       u8g2.setCursor(16, 128);
       u8g2.printf("hac%lum,vac%lum",gpsData.hAcc/1000,gpsData.vAcc/1000);
-      */
-      u8g2.drawGlyph(78, 128, 0x51);                                                         //Wifi
-      u8g2.drawXBMP(102, 113, u8g2_satellite_width, u8g2_satellite_height, u8g2_satellite_bits); //sattelite icon
-                                                                                             //      u8g2.drawGlyph(102, 128, 0x47); //sattelite in view (gps icon)
+*/
+      u8g2.drawGlyph(70, 128, 0x51);                    //Wifi
+      u8g2.drawXBMP(98, 113, satteliteicon_width, satteliteicon_height, satteliteicon_bits); //sattelite icon
       u8g2.setFont(u8g2_font_7x14_tr);
       u8g2.setCursor(16, 128);
       uint8_t fix = gpsData.fixtype;
@@ -379,23 +427,26 @@ void sendData(char *buff, bool SerialOut, bool UdpOut, bool OLEDOut)
       u8g2.printf("%s", buff_u8g2);
 
       u8g2.setFont(u8g2_font_open_iconic_app_2x_t);
-      u8g2.drawGlyph(40, 128, 0x46); //compass
+      u8g2.drawGlyph(36, 128, 0x46); //compass
       u8g2.setFont(u8g2_font_7x14_tf);
-      u8g2.setCursor(58, 128);
-      if (compassConnected)
+      u8g2.setCursor(54, 128);
+      if (compass_selector==HMC)
       {
-        snprintf(buff_u8g2, 16, "%ld%c", gpsData.magDec / 100, '\xb0');
-        u8g2.print(buff_u8g2);
+        //        snprintf(buff_u8g2, 16, "%ld%c", gpsData.magDec / 100, '\xb0');
+        u8g2.print("h");
       }
-      else
+      else if(compass_selector==QMC)
       {
+        u8g2.print("q");
+      }
+      else{
         u8g2.print("x");
       }
 
-      u8g2.setCursor(96, 128);
+      u8g2.setCursor(88, 128);
       u8g2.print(WiFi.softAPgetStationNum());
 
-      u8g2.setCursor(118, 128);
+      u8g2.setCursor(114, 128);
       u8g2.printf("%u", gpsData.SIV);
     } while (u8g2.nextPage());
   }
