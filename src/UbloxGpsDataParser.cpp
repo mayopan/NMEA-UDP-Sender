@@ -3,6 +3,10 @@
 #include <Arduino.h>
 #endif
 
+#ifndef SPARKFUN_UBLOX_ARDUINO_LIBRARY_H
+#include <SparkFun_Ublox_Arduino_Library.h>
+#endif
+
 #include "UbloxGpsDataParser.h"
 
 char *UbloxGPS::csCalc(char *buffin, size_t length)
@@ -37,7 +41,6 @@ void UbloxGPS::parse(SFE_UBLOX_GPS _gps)
     solution = _gps.getCarrierSolutionType();
     hAcc = _gps.getHorizontalAccuracy();
     vAcc = _gps.getVerticalAccuracy();
-    magDec = _gps.getmagDecline();
 
     latdeg = (int)(latitude / 10000000);
     latmin = (float)(latitude % 10000000) / 10000000 * 60;
@@ -86,7 +89,7 @@ void UbloxGPS::parse(SFE_UBLOX_GPS _gps)
     strcat(nmeaGGA, csCalc(nmeaGGA, sizeof(nmeaGGA)));
 };
 
-char *HMC5883Compass::csCalc(char *buffin, size_t length)
+char *Compass::csCalc(char *buffin, size_t length)
 {
 
     char csDigit = 0;
@@ -98,20 +101,14 @@ char *HMC5883Compass::csCalc(char *buffin, size_t length)
     return cs;
 };
 
-void HMC5883Compass::parse(HMC5883L _compass)
+void Compass::parse(HMC5883L _compass, QMC5883L _qmc_compass, int compass_selector)
 {
-    //Compass data polling
-    Vector norm = _compass.readNormalize();
-
-    // Calculate heading
-    float heading = atan2(norm.XAxis, norm.YAxis);
-
     // Set declination angle on your location and fix heading
     // You can find your declination on: http://magnetic-declination.com/
     // (+) Positive or (-) for negative
     // For Bytom / Poland declination angle is 4'26E (positive)
     // Formula: (deg + (min / 60.0)) / (180 / M_PI);
-    float declinationAngle = 0.13;
+//    float declinationAngle = 0.13;
     char ew_magdec = 'E';
     if (declinationAngle >= 0)
     {
@@ -121,21 +118,35 @@ void HMC5883Compass::parse(HMC5883L _compass)
     {
         ew_magdec = 'E';
     }
-    heading += declinationAngle;
 
-    // Correct for heading < 0deg and heading > 360deg
-    if (heading < 0)
+    if (compass_selector == 1)
     {
-        heading += 2 * PI;
+        //Compass data polling
+        Vector norm = _compass.readNormalize();
+
+        // Calculate heading
+        float heading = atan2(norm.XAxis, norm.YAxis);
+        heading += declinationAngle;
+        headingDegrees = heading * 180 / PI;
+        if(headingDegrees < 0)
+        {
+            headingDegrees += 360;
+        }
+
+        if (headingDegrees > 360)
+        {
+            headingDegrees -= 360;
+        }
+    }
+    else if (compass_selector == 2)
+    {
+        headingDegrees = _qmc_compass.readHeading(); //+declinationAngle*180/PI;
+    }
+    else
+    {
+        headingDegrees = 0;
     }
 
-    if (heading > 2 * PI)
-    {
-        heading -= 2 * PI;
-    }
-
-    // Convert to degrees
-    headingDegrees = heading * 180 / PI;
     sprintf(nmeaHDG, "$HCHDG,%03.1f,,,%.1f,%c", headingDegrees, declinationAngle * 180 / PI, ew_magdec);
     strcat(nmeaHDG, csCalc(nmeaHDG, sizeof(nmeaHDG)));
 };
