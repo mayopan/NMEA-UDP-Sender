@@ -25,11 +25,10 @@
   Connect the U-Blox serial RX pin to ESP32 devkitC pin 17
   Open the serial monitor at 115200 baud to see the output
 */
-#define MAX_PAYLOAD_SIZE 300
 
 #include <Arduino.h>
 
-#include <SparkFun_Ublox_Arduino_Library.h> //http://librarymanager/All#SparkFun_Ublox_GPS
+#include "SparkFun_Ublox_Arduino_Library.h" //https://github.com/sparkfun/SparkFun_Ublox_Arduino_Library
 SFE_UBLOX_GPS myGPS;
 
 /*-----Wifi section----------------------------*/
@@ -236,7 +235,7 @@ void setup()
   myGPS.setAutoPVT(true, true);
   myGPS.saveConfiguration(); //Save the current settings to flash and BBR
   u8g2log.println("GPS config done.");
-//  delay(5000);
+  delay(5000);
 }
 
 void loop()
