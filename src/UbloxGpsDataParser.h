@@ -2,7 +2,7 @@
 #define UBLOX_GPS_DATA_PARSER_H
 
 #ifndef SPARKFUN_UBLOX_ARDUINO_LIBRARY_H
-#include "SparkFun_Ublox_Arduino_Librarymod.h"
+#include "SparkFun_Ublox_Arduino_Library.h"
 #endif
 
 #ifndef HMC5883L

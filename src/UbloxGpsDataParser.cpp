@@ -9,6 +9,8 @@
 
 #include "UbloxGpsDataParser.h"
 
+const int localtimeDiff = 9;
+
 char *UbloxGPS::csCalc(char *buffin, size_t length)
 {
 
@@ -39,6 +41,32 @@ void UbloxGPS::parse(SFE_UBLOX_GPS _gps)
     mm = _gps.getMonth();
     yy = _gps.getYear() % 100;
     solution = _gps.getCarrierSolutionType();
+
+    hour+=localtimeDiff;
+    if(hour >= 24)
+    {
+        hour-=24;
+        dd++;
+        if(dd>31 && (mm == 1 || mm == 3 || mm == 5 || mm == 7 || mm == 8 || mm == 10 || mm == 12))
+        {
+            dd-=31;
+            mm++;
+            if(mm > 12)
+            {
+                mm-=12;
+                yy++;
+                if(yy>=100)
+                {
+                    yy-=100;
+                }
+            }
+        }
+        else if(dd>30 && (mm == 2 || mm == 4 || mm == 6 || mm == 9 || mm == 11))
+        {
+            dd-=30;
+            mm++;
+        }
+    }
 
     latdeg = (int)(latitude / 10000000);
     latmin = (float)(latitude % 10000000) / 10000000 * 60;
@@ -107,6 +135,7 @@ void Compass::parse(HMC5883L _compass, QMC5883L _qmc_compass, int compass_select
     // For Bytom / Poland declination angle is 4'26E (positive)
     // Formula: (deg + (min / 60.0)) / (180 / M_PI);
 //    float declinationAngle = 0.13;
+    Vector2D mag;
     char ew_magdec = 'E';
     if (declinationAngle >= 0)
     {
@@ -123,7 +152,7 @@ void Compass::parse(HMC5883L _compass, QMC5883L _qmc_compass, int compass_select
         Vector norm = _compass.readNormalize();
 
         // Calculate heading
-        float heading = atan2(norm.XAxis, norm.YAxis);
+        float heading = (float)atan2(norm.XAxis, norm.YAxis);
         heading += declinationAngle;
         headingDegrees = heading * 180 / PI;
         if(headingDegrees < 0)
@@ -138,7 +167,19 @@ void Compass::parse(HMC5883L _compass, QMC5883L _qmc_compass, int compass_select
     }
     else if (compass_selector == 2)
     {
-        headingDegrees = _qmc_compass.readHeading(); //+declinationAngle*180/PI;
+          int16_t z, t;
+        if (_qmc_compass.readRaw(&mag.x, &mag.y, &z, &t) == 0)
+        {
+            headingDegrees = 0;
+        }
+        else
+        {
+            headingDegrees = 180 * (atan2(-mag.x, -mag.y) +declinationAngle)/ PI;
+            if(headingDegrees<0)
+                headingDegrees+=360;
+        }
+
+        //headingDegrees = _qmc_compass.readHeading(); //+declinationAngle*180/PI;
     }
     else
     {

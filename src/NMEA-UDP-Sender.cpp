@@ -74,10 +74,10 @@ const int QMC = 2;
 int compass_selector = HMC;
 Compass compassData;
 
-#include <HMC5883L.h>
+#include "HMC5883L.h"
 HMC5883L compass;
 
-#include <QMC5883L.h>
+#include "QMC5883L.h"
 QMC5883L qmc_compass;
 
 //End Compass section
