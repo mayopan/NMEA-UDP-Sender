@@ -42,32 +42,6 @@ void UbloxGPS::parse(SFE_UBLOX_GPS _gps)
     yy = _gps.getYear() % 100;
     solution = _gps.getCarrierSolutionType();
 
-    hour+=localtimeDiff;
-    if(hour >= 24)
-    {
-        hour-=24;
-        dd++;
-        if(dd>31 && (mm == 1 || mm == 3 || mm == 5 || mm == 7 || mm == 8 || mm == 10 || mm == 12))
-        {
-            dd-=31;
-            mm++;
-            if(mm > 12)
-            {
-                mm-=12;
-                yy++;
-                if(yy>=100)
-                {
-                    yy-=100;
-                }
-            }
-        }
-        else if(dd>30 && (mm == 2 || mm == 4 || mm == 6 || mm == 9 || mm == 11))
-        {
-            dd-=30;
-            mm++;
-        }
-    }
-
     latdeg = (int)(latitude / 10000000);
     latmin = (float)(latitude % 10000000) / 10000000 * 60;
     ns = 'N';
@@ -106,13 +80,39 @@ void UbloxGPS::parse(SFE_UBLOX_GPS _gps)
     case 5:
         break;
     }
-    snprintf(nmeaRMC, sizeof(nmeaRMC), "$GNRMC,%02u%02u%02u.%03u,A,%d%2.5f,%c,%ld%2.5f,%c,%1.2f,%03.2f,%02u%02u%02u,,,%c",
+    snprintf(nmeaRMC, sizeof(nmeaRMC), "$GNRMC,%02u%02u%02u.%01u,A,%02d%02.5f,%c,%03ld%02.5f,%c,%1.2f,%03.2f,%02u%02u%02u,,,%c",
              hour, minute, second, msecond, latdeg, latmin, ns, londeg, lonmin, ew, spdkt, cog, dd, mm, yy, fixRMC);
     strcat(nmeaRMC, csCalc(nmeaRMC, sizeof(nmeaRMC)));
 
-    snprintf(nmeaGGA, sizeof(nmeaGGA), "$GNGGA,%02u%02u%02u.%1u,%d%2.5f,%c,%ld%2.5f,%c,%d,%u,%lu,%.1f,M,,M,,,",
+    snprintf(nmeaGGA, sizeof(nmeaGGA), "$GNGGA,%02u%02u%02u.%01u,%02d%02.5f,%c,%03ld%02.5f,%c,%d,%u,%lu,%.1f,M,,M,,,",
              hour, minute, second, msecond / 100, latdeg, latmin, ns, londeg, lonmin, ew, fixGGA, SIV, pDOP, altitude);
     strcat(nmeaGGA, csCalc(nmeaGGA, sizeof(nmeaGGA)));
+    
+    hour += localtimeDiff;
+    if (hour >= 24)
+    {
+        hour -= 24;
+        dd++;
+        if (dd > 31 && (mm == 1 || mm == 3 || mm == 5 || mm == 7 || mm == 8 || mm == 10 || mm == 12))
+        {
+            dd -= 31;
+            mm++;
+            if (mm > 12)
+            {
+                mm -= 12;
+                yy++;
+                if (yy >= 100)
+                {
+                    yy -= 100;
+                }
+            }
+        }
+        else if (dd > 30 && (mm == 2 || mm == 4 || mm == 6 || mm == 9 || mm == 11))
+        {
+            dd -= 30;
+            mm++;
+        }
+    }
 };
 
 char *Compass::csCalc(char *buffin, size_t length)
