@@ -222,11 +222,29 @@ void setup()
   } while (1);
   Serial.println("GPS serial Connected @baud 115200");
   u8g2log.println("GPS Connected.");
-  udp.beginPacket(udpAddress1, udpPort);
+  udp.beginPacket(broadcastIP, udpPort);
   udp.print("GPS serial Connected @baud 115200");
   udp.endPacket();
 
 //  myGPS.getModuleInfo();
+  myGPS.getModuleInfo();
+  Serial.println("Module Info : ");
+  u8g2log.println("Module Info :");
+  Serial.print("Soft version: ");
+  Serial.println(myGPS.minfo.swVersion);
+  u8g2log.println(myGPS.minfo.swVersion);
+  Serial.print("Hard version: ");
+  Serial.println(myGPS.minfo.hwVersion);
+  u8g2log.println(myGPS.minfo.hwVersion);
+  Serial.println("Extensions:");
+  for (int i = 0; i < myGPS.minfo.extensionNo; i++)
+  {
+    Serial.print("  ");
+    Serial.println(myGPS.minfo.extension[i]);
+    u8g2log.println(myGPS.minfo.extension[i]);
+  }
+  /*
+  Serial.println();
   Serial.print(F("Version: "));
   u8g2log.print("Protcol Ver: ");
   byte versionHigh = myGPS.getProtocolVersionHigh();
@@ -237,14 +255,16 @@ void setup()
   byte versionLow = myGPS.getProtocolVersionLow();
   Serial.println(versionLow);
   u8g2log.println(versionLow);
-
+  */
+  delay(5000);
+  u8g2log.println("Saving GPS config..");
   myGPS.setUART1Output(COM_TYPE_UBX); //Set the UART port to output UBX only
   myGPS.setI2COutput(COM_TYPE_UBX);   //Set the I2C port to output UBX only (turn off NMEA noise)
   myGPS.setNavigationFrequency(5);
   myGPS.setAutoPVT(true, true);
   myGPS.saveConfiguration(); //Save the current settings to flash and BBR
   u8g2log.println("GPS config done.");
-  delay(5000);
+
 }
 
 void loop()

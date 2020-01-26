@@ -85,17 +85,19 @@ It sends GNRMC, GNGGA and HCHDG sentences.
  
 # Note
  
-I wanted to broadcast NMEA0183 instead of unicast for multi devices connection. But UDP data flow is terribly stacked in broadcast.
-I struggled to fix it for days but I couldn't. Welcome your suggestions if you can fix it!
+Broadcast NMEA0183 via UDP works well now!
+Sparkfun Ublox library has some bug, so I use modified one.
+I'll make PR for that.
+
 I will add new function below.
 * Add GGA sentence ... Done!
 * Add HDM sentence with mag compass output ... Done!
 * OLED display output with compass graphic...  Done!
 * color OLED (SPI connection) display output ... under construction
-* GPS module info output ... under construction
-* UDP bloadcasting
+* GPS module info output ... Done!
+* UDP bloadcasting... Done!
 * Seatalk - NMEA0183 bi-directional communication
-* small issue: When reconnects Wifi after once disconnected,  SoftAP atatches new IP, so UDP connection is lost. 
+
 
 # Author
  
