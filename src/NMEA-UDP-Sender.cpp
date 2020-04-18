@@ -243,19 +243,7 @@ void setup()
     Serial.println(myGPS.minfo.extension[i]);
     u8g2log.println(myGPS.minfo.extension[i]);
   }
-  /*
-  Serial.println();
-  Serial.print(F("Version: "));
-  u8g2log.print("Protcol Ver: ");
-  byte versionHigh = myGPS.getProtocolVersionHigh();
-  Serial.print(versionHigh);
-  u8g2log.print(versionHigh);
-  Serial.print(".");
-  u8g2log.print(".");
-  byte versionLow = myGPS.getProtocolVersionLow();
-  Serial.println(versionLow);
-  u8g2log.println(versionLow);
-  */
+
   delay(5000);
   u8g2log.println("Saving GPS config..");
   myGPS.setUART1Output(COM_TYPE_UBX); //Set the UART port to output UBX only
@@ -263,7 +251,7 @@ void setup()
   myGPS.setNavigationFrequency(5);
   myGPS.setAutoPVT(true, true);
   myGPS.saveConfiguration(); //Save the current settings to flash and BBR
-  u8g2log.println("GPS config done.");
+  u8g2log.println("done.");
 
 }
 
