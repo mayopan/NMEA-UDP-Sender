@@ -59,7 +59,7 @@ WiFiUDP udp;
 /*-------end Wifi section-------------*/
 
 //Send NMEA data with checksum on UDP
-
+#define UART_BAUD 115200
 #include "UbloxGpsDataParser.h"
 
 UbloxGPS gpsData;
@@ -194,36 +194,93 @@ void setup()
 
   //Assume that the U-Blox GPS is running at 9600 baud (the default) or at 115200 baud.
   //Loop until we're in sync and then ensure it's at 115200 baud.
-  do
+  int32_t baud = 9600;
+
+  Serial2.begin(baud);
+  Serial.print("Connecting GPS at 9600 baud");
+  while (!myGPS.begin(Serial2)) // Typically, default baud rate is 9600, But if any other rate, it's displayed and stopped.
   {
-    Serial.println("GPS: trying 115200 baud");
-    Serial2.begin(115200);
-    delay(100);
-    if (myGPS.begin(Serial2) == true)
-      break;
-    Serial.println("GPS: trying 9600 baud");
-    delay(100);
-    Serial2.begin(9600);
-    if (myGPS.begin(Serial2) == true)
+    Serial.println("... is failed.");
+
+    if (baud == 38400)
     {
-      Serial.println("GPS: Connected at 9600 baud, switching to 115200");
-      u8g2log.println("GPS: Connected @9600");
-      u8g2log.println("Changing baud to 115200");
-      myGPS.setSerialRate(115200);
-      delay(400);
+      baud = 57600;
+    }
+    else if (baud > 115200)
+    {
+      baud = 9600;
     }
     else
     {
-
-      myGPS.hardReset();
-      Serial.println("GPS: hard reset!");
-      delay(1000); //Wait a bit before trying again to limit the Serial output
+      baud *= 2;
     }
+    Serial.print("Connecting GPS at ");
+    Serial.print(baud);
+    Serial.print(" baud");
+    Serial2.begin(baud);
+  }
+  Serial.println(" is success!");
+  u8g2log.printf("GPS: Connected @%u",baud);
+
+  if(baud != UART_BAUD)
+  {
+    Serial.printf("Changing baud to %u\n Waiting", UART_BAUD);
+    u8g2log.printf("Changing baud to %u\n", UART_BAUD);
+    myGPS.setSerialRate(UART_BAUD);
+    delay(500);
+    Serial2.begin(UART_BAUD);
+    while (!myGPS.begin(Serial2))
+    {
+      Serial.print(".");
+      u8g2log.print(".");
+    }
+  }
+
+/*
+  do
+  {
+    Serial.printf("GPS: trying %lu baud",UART_BAUD);
+    Serial2.begin(UART_BAUD);
+    delay(100);
+    if (myGPS.begin(Serial2) == true)
+      break;
+    Serial.printf("GPS: not found at %lu baud. Looking for 9600 baud\n",UART_BAUD);
+    Serial2.begin(9600);
+    delay(100);
+    if (myGPS.begin(Serial2) == true)
+    {
+      Serial.println("GPS: Connected at 9600 baud");
+      u8g2log.println("GPS: Connected @9600");
+    }
+    else
+    {
+      Serial.printf("GPS: not found at 9600 baud. trying %lu baud\n",UART_BAUD);
+      Serial2.begin(UART_BAUD);
+      delay(100);
+      if (myGPS.begin(Serial2) == true)
+      {
+        Serial.printf("GPS: Connected at %lu baud\n",UART_BAUD);
+        u8g2log.printf("GPS: Connected @%lu\n",UART_BAUD);
+      }
+      else
+      {
+        Serial.println("GPS: Check wiring! Trying again.");
+        u8g2log.println("GPS: Check wiring!");
+        delay(1000); //Wait a bit before trying again to limit the Serial output
+      }
+    }
+    Serial.printf("Changing baud to %lu\n",UART_BAUD);
+    u8g2log.printf("Changing baud to %lu\n", UART_BAUD);
+    myGPS.setSerialRate(UART_BAUD);
+    delay(400);
   } while (1);
-  Serial.println("GPS serial Connected @baud 115200");
-  u8g2log.println("GPS Connected.");
+
+  */
+
+  Serial.printf("\nGPS serial Connected @baud %u\n", UART_BAUD);
+  u8g2log.printf("\nGPS Connected.\n");
   udp.beginPacket(broadcastIP, udpPort);
-  udp.print("GPS serial Connected @baud 115200");
+  udp.printf("GPS serial Connected @baud %u\n", UART_BAUD);
   udp.endPacket();
 
 //  myGPS.getModuleInfo();
