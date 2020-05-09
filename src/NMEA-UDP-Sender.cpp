@@ -236,47 +236,6 @@ void setup()
     }
   }
 
-/*
-  do
-  {
-    Serial.printf("GPS: trying %lu baud",UART_BAUD);
-    Serial2.begin(UART_BAUD);
-    delay(100);
-    if (myGPS.begin(Serial2) == true)
-      break;
-    Serial.printf("GPS: not found at %lu baud. Looking for 9600 baud\n",UART_BAUD);
-    Serial2.begin(9600);
-    delay(100);
-    if (myGPS.begin(Serial2) == true)
-    {
-      Serial.println("GPS: Connected at 9600 baud");
-      u8g2log.println("GPS: Connected @9600");
-    }
-    else
-    {
-      Serial.printf("GPS: not found at 9600 baud. trying %lu baud\n",UART_BAUD);
-      Serial2.begin(UART_BAUD);
-      delay(100);
-      if (myGPS.begin(Serial2) == true)
-      {
-        Serial.printf("GPS: Connected at %lu baud\n",UART_BAUD);
-        u8g2log.printf("GPS: Connected @%lu\n",UART_BAUD);
-      }
-      else
-      {
-        Serial.println("GPS: Check wiring! Trying again.");
-        u8g2log.println("GPS: Check wiring!");
-        delay(1000); //Wait a bit before trying again to limit the Serial output
-      }
-    }
-    Serial.printf("Changing baud to %lu\n",UART_BAUD);
-    u8g2log.printf("Changing baud to %lu\n", UART_BAUD);
-    myGPS.setSerialRate(UART_BAUD);
-    delay(400);
-  } while (1);
-
-  */
-
   Serial.printf("\nGPS serial Connected @baud %u\n", UART_BAUD);
   u8g2log.printf("\nGPS Connected.\n");
   udp.beginPacket(broadcastIP, udpPort);
