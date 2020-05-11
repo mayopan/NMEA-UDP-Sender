@@ -84,7 +84,9 @@ QMC5883L qmc_compass;
 
 //OLED section
 #include <U8g2lib.h>
-U8G2_SH1107_PIMORONI_128X128_1_HW_I2C u8g2(U8G2_R0, /* reset=*/8);
+#define SDA_PIN 32
+#define SCL_PIN 33
+U8G2_SH1107_PIMORONI_128X128_1_HW_I2C u8g2(U8G2_R0, /* reset=*/8, SCL_PIN, SDA_PIN);
 #define U8LOG_WIDTH 30
 #define U8LOG_HEIGHT 10
 uint8_t u8log_buffer[U8LOG_WIDTH * U8LOG_HEIGHT];
