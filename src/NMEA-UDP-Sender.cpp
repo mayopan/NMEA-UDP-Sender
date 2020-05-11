@@ -28,8 +28,10 @@
 
 #include <Arduino.h>
 
-#include "SparkFun_Ublox_Arduino_Library.h" //https://github.com/sparkfun/SparkFun_Ublox_Arduino_Library
-SFE_UBLOX_GPS myGPS;
+//#include "SparkFun_Ublox_Arduino_Library.h" //https://github.com/sparkfun/SparkFun_Ublox_Arduino_Library
+//SFE_UBLOX_GPS myGPS;
+#include "SparkFun_Ublox_Arduino_Library_Ex.h"
+extern SFE_UBLOX_GPS_ADD myGPS;
 
 /*-----Wifi section----------------------------*/
 #include <WiFi.h>
@@ -196,50 +198,40 @@ void setup()
 
   //Assume that the U-Blox GPS is running at 9600 baud (the default) or at 115200 baud.
   //Loop until we're in sync and then ensure it's at 115200 baud.
-  int32_t baud = 9600;
 
-  Serial2.begin(baud);
-  Serial.print("Connecting GPS at 9600 baud");
-  while (!myGPS.begin(Serial2)) // Typically, default baud rate is 9600, But if any other rate, it's displayed and stopped.
+  Serial2.begin(UART_BAUD);
+  Serial.print("Connecting GPS ");
+  if(myGPS.begin(Serial2)) // Typically, default baud rate is 9600, But if any other rate, it's displayed and stopped.
   {
-    Serial.println("... is failed.");
-
-    if (baud == 38400)
+    Serial.println(" is success!");
+  }
+  else
+  {
+    Serial2.begin(9600);
+    if(myGPS.begin(Serial2))
     {
-      baud = 57600;
-    }
-    else if (baud > 115200)
-    {
-      baud = 9600;
+      Serial.printf("Changing baud to %u\n Waiting", UART_BAUD);
+      u8g2log.printf("Changing baud to %u\n", UART_BAUD);
+      myGPS.setSerialRate(UART_BAUD);      
+      delay(500);
+      Serial2.begin(UART_BAUD);
+      while (!myGPS.begin(Serial2))
+      {
+        Serial.print(".");
+        u8g2log.print(".");
+      }
     }
     else
     {
-      baud *= 2;
-    }
-    Serial.print("Connecting GPS at ");
-    Serial.print(baud);
-    Serial.print(" baud");
-    Serial2.begin(baud);
-  }
-  Serial.println(" is success!");
-  u8g2log.printf("GPS: Connected @%u",baud);
-
-  if(baud != UART_BAUD)
-  {
-    Serial.printf("Changing baud to %u\n Waiting", UART_BAUD);
-    u8g2log.printf("Changing baud to %u\n", UART_BAUD);
-    myGPS.setSerialRate(UART_BAUD);
-    delay(500);
-    Serial2.begin(UART_BAUD);
-    while (!myGPS.begin(Serial2))
-    {
-      Serial.print(".");
-      u8g2log.print(".");
+      Serial.println("No GPS found");
+      u8g2log.println("No GPS found");
+      while(1)
+        ;
     }
   }
-
+  u8g2log.printf("GPS: Connected @%u",UART_BAUD);
   Serial.printf("\nGPS serial Connected @baud %u\n", UART_BAUD);
-  u8g2log.printf("\nGPS Connected.\n");
+
   udp.beginPacket(broadcastIP, udpPort);
   udp.printf("GPS serial Connected @baud %u\n", UART_BAUD);
   udp.endPacket();

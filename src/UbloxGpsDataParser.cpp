@@ -3,10 +3,6 @@
 #include <Arduino.h>
 #endif
 
-#ifndef SPARKFUN_UBLOX_ARDUINO_LIBRARY_H
-#include <SparkFun_Ublox_Arduino_Library.h>
-#endif
-
 #include "UbloxGpsDataParser.h"
 
 const int localtimeDiff = 9;
